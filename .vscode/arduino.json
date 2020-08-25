@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:uno",
+    "programmer": "AVRISP mkII",
+    "sketch": "Vibrate Warning System Eskateboard Arduino.ino",
+    "port": "COM4"
+}
