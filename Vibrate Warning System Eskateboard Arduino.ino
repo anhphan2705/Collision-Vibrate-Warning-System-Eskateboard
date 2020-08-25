@@ -30,8 +30,8 @@ void loop()
 {
   long duration, distance, distanceCm, distanceInch;
   int delayTime = 100;
-  int safeDistanceCm = 3000;
-  int safeDistanceIn = 1181;
+  int safeDistanceCm = 400;
+  int safeDistanceIn = 158;
   boolean vibratorStatus = false;
 
   //Duration count from the moment the Ultrasonic sensor starts to the moment it recieves the signal back
