@@ -7,18 +7,23 @@
 //#include <LiquidCrystal.h> //Load Liquid Crystal Library
 //LiquidCrystal LCD(11,10,9,2,3,4,5);  //Create Liquid Crystal Object called LCD
 
-#define trigPin 13 //Sensor Echo pin connected to Arduino pin 13
-#define echoPin 12 //Sensor Trip pin connected to Arduino pin 12
-#define vibrator 8 //Vibration Motor connected to Arduino pin 7
-#define redLED 2  //redLED connected to Arduino pin 2
-#define greenLED 3  //greenLED connected to Arduino pin 3
-#define blueLED 4 //blueLED connected to Arduino pin 4
+#define trigPin_LF 7 //Sensor Echo Left Front pin connected to Arduino pin 7
+#define echoPin_LF 6 //Sensor Trip Left Front pin connected to Arduino pin 6
+#define echoPin_F 5 //Sensor Trip Front pin connected to Arduino pin 5
+#define trigPin_F 4 //Sensor Echo Front pin connected to Arduino pin 4
+#define echoPin_RF 3 //Sensor Trip Right Front pin connected to Arduino pin 3
+#define trigPin_RF 2 //Sensor Echo Right Front pin connected to Arduino pin 2
+#define vibrator 8 //Vibration Motor connected to Arduino pin 8
+#define redLED 11  //redLED connected to Arduino pin 11
+#define greenLED 10  //greenLED connected to Arduino pin 10
+#define blueLED 9 //blueLED connected to Arduino pin 9
 const String warningLight[] = {"green", "yellow", "orange", "red"};
 const int greenRGB_values[3] = {0, 255, 0};
 const int yellowRGB_values[3] = {255, 255, 0};
 const int orangeRGB_values[3] = {255, 69, 0};
 const int redRGB_values[3] = {255, 0, 0};
-boolean warningVibratorStatus = false;
+const String booleanDef[2] = {"false", "true"};
+String warningVibratorStatus;
 String warningLightColor = "green";
 
 void setup() 
@@ -27,8 +32,12 @@ void setup()
   Serial.begin(9600); 
   
   //Define devices used
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  pinMode(trigPin_LF, OUTPUT);
+  pinMode(echoPin_LF, INPUT);
+  pinMode(trigPin_F, OUTPUT);
+  pinMode(echoPin_F, INPUT);
+  pinMode(trigPin_RF, OUTPUT);
+  pinMode(echoPin_RF, INPUT);
   pinMode(vibrator, OUTPUT);
   pinMode(redLED, OUTPUT);
   pinMode(greenLED, OUTPUT);
@@ -43,23 +52,22 @@ void setup()
 
 void loop() 
 {
-  long duration, distance, distanceCm, distanceInch;
+  long distanceCm_LF, distanceCm_F, distanceCm_RF, shortDistance;
   int delayTime = 100;
-  const int safeDistanceCm = 300;
-  const int safeDistanceIn = 118;
-  const int moderateDistanceCm = 200;
-  const int moderateDistanceIn = 79;
-  const int dangerDistanceCm = 100;
-  const int dangerDistanceIn = 39;
+  const int safeDistanceCm = 400;
+  const int moderateDistanceCm = 300;
+  const int dangerDistanceCm = 200;
 
-  //Duration count from the moment the Ultrasonic sensor starts to the moment it recieves the signal back
-  duration = getDuration();
-  //Calculate the distance (apply the speed of sound)
-  distanceCm = inCentimeter(duration);    
-  distanceInch = inInch(duration);
+  //Save the distance (apply the speed of sound)
+  distanceCm_LF = getDistanceLF();
+  distanceCm_F = getDistanceF();
+  distanceCm_RF = getDistanceRF();
+
+  //Find the smallest distance
+  shortDistance = isSmallestDistance(distanceCm_LF, distanceCm_F, distanceCm_RF);
 
   //Update the status of the Vibration Motor
-  warningSystem(safeDistanceCm, safeDistanceIn, moderateDistanceCm, moderateDistanceIn, dangerDistanceCm, dangerDistanceIn, distanceCm, distanceInch);
+  warningSystem(safeDistanceCm, moderateDistanceCm, dangerDistanceCm, shortDistance);
   
 /*
   //Display on LCD screen
@@ -68,32 +76,98 @@ void loop()
 */
 
   //Update system on Serial port for debugging
-  printSerialReport(distanceCm, distanceInch, warningVibratorStatus, warningLightColor);
+  printSerialReport(distanceCm_LF, distanceCm_F, distanceCm_RF, shortDistance, warningVibratorStatus, warningLightColor);
   
   delay(delayTime);
 }
 
-//Calculate total duration of the sonar bounce
-long getDuration()
+//Ping each sensor
+long pingLF()
 {
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trigPin_LF, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(trigPin_LF, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trigPin_LF, LOW);
   
-  return pulseIn(echoPin, HIGH);
+  return pulseIn(echoPin_LF, HIGH);
+}
+
+long pingF()
+{
+  digitalWrite(trigPin_F, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin_F, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin_F, LOW);
+  
+  return pulseIn(echoPin_F, HIGH);
+}
+
+long pingRF()
+{
+  digitalWrite(trigPin_RF, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin_RF, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin_RF, LOW);
+  
+  return pulseIn(echoPin_RF, HIGH);
 }
 
 //Convert into distance (cm)
 long inCentimeter(long duration) {
    return duration / 29 / 2;
 }
+/*
 //Convert into distance (in)
 long inInch(long duration) {
    return duration / 74 / 2;
 }
+*/
 
+//Calculate distance from sensor to object
+long getDistanceLF()
+{
+  return inCentimeter(pingLF());
+}
+
+long getDistanceF()
+{
+  return inCentimeter(pingF());
+}
+
+long getDistanceRF()
+{
+  return inCentimeter(pingRF());
+}
+
+//Identify the closest distance
+long isSmallestDistance(long distanceCm_LF, long distanceCm_F, long distanceCm_RF)
+{
+  int sortQuantity = 3;
+  int cycle = 0;
+  int sorted = 0;
+  long distances[sortQuantity] = {distanceCm_LF, distanceCm_F, distanceCm_RF};
+  
+  while ((cycle-sorted) < sortQuantity)
+  {
+    for (int i = 1; i <= sortQuantity; i++)
+    {
+      long tempDistance = 0;
+      if (distances[i-1] > distances[i])
+      {
+        tempDistance = distances[i-1];
+        distances[i-1] = distances[i];
+        distances[i] = tempDistance;
+        sorted++;
+      }
+      cycle++;
+    }
+  }
+
+  return distances[0];
+}
 /*
 //LCD Print
 void printDistanceInCentimeterLCD(long distanceCm)
@@ -116,39 +190,39 @@ void printDistanceInInchLCD(long distanceInch)
 */
 
 //Activate the Vibrate Motor if below the safe range
-void warningSystem(int safeDistanceCm, int safeDistanceIn, int moderateDistanceCm, int moderateDistanceIn, int dangerDistanceCm, int dangerDistanceIn, long distanceCm, long distanceInch)
+void warningSystem(int safeDistanceCm, int moderateDistanceCm, int dangerDistanceCm, long distanceCm)
 {
-  //First zone (Distance: 2m to 3m away)
-  if ((distanceCm < safeDistanceCm && distanceCm > moderateDistanceCm) || (distanceInch < safeDistanceIn && distanceInch > moderateDistanceIn)) 
+  //First zone (Distance: 3m to 4m away)
+  if (distanceCm < safeDistanceCm && distanceCm > moderateDistanceCm) 
   {
     firstVibrationZone();
     lightActivator(yellowRGB_values[0], yellowRGB_values[1], yellowRGB_values[2]);
-    serialReport(true, 1);
+    serialReport(booleanDef[1], 1);
   }
-  //Second zone (Distance: 1m to 2m away)
-  else if ((distanceCm < moderateDistanceCm && distanceCm > dangerDistanceCm) || (distanceInch < moderateDistanceIn && distanceCm > dangerDistanceCm)) 
+  //Second zone (Distance: 2m to 3m away)
+  else if (distanceCm < moderateDistanceCm && distanceCm > dangerDistanceCm) 
   {
     secondVibrationZone();
     lightActivator(orangeRGB_values[0], orangeRGB_values[1], orangeRGB_values[2]);
-    serialReport(true, 2);
+    serialReport(booleanDef[1], 2);
   } 
-  //Third zone (Distance: within 1m)
-  else if (distanceCm < dangerDistanceCm || distanceInch < dangerDistanceIn) 
+  //Third zone (Distance: within 2m)
+  else if (distanceCm < dangerDistanceCm) 
   {
     thirdVibrationZone();
     lightActivator(redRGB_values[0], redRGB_values[1], redRGB_values[2]);
-    serialReport(true, 3);
+    serialReport(booleanDef[1], 3);
   } 
   //Nothing detected
   else 
   {
     safeVibrationZone();
     lightActivator(greenRGB_values[0], greenRGB_values[1], greenRGB_values[2]);
-    serialReport(false, 0);
+    serialReport(booleanDef[0], 0);
   }
 }
 
-//Four vibration stages
+//Four Vibration Stages
 void safeVibrationZone()
 {
   digitalWrite(vibrator, LOW);
@@ -182,29 +256,37 @@ void lightActivator(int redRGB, int greenRGB, int blueRGB)
 }
 
 //Report warning system status
-void serialReport(boolean warningVibratorStatus, int warningLightValue)
+void serialReport(String VibratorStatus, int warningLightValue)
 {
-  warningVibratorStatus = warningVibratorStatus;
+  warningVibratorStatus = VibratorStatus;
   warningLightColor = warningLight[warningLightValue];
 }
 
 //Update system into Serial port
-void printSerialReport(long distanceCm, long distanceIn, boolean warningVibratorStatus, String warningLightColor)
+void printSerialReport(long distanceCm_LF, long distanceCm_F, long distanceCm_RF, long shortDistance, String VibratorStatus, String warningLightColor)
 {
   Serial.println("Object Distance & Vibration & Light");
-  Serial.print(distanceCm);
+
+  Serial.print("LF: ");
+  Serial.print(distanceCm_LF);
   Serial.println(" cm");
-  Serial.print(distanceIn);
-  Serial.println(" in");
-  Serial.println("Vibration: ");
-  if (warningVibratorStatus)
-  {
-    Serial.println("true");
-  } else {
-    Serial.println("false");
-  }
+
+  Serial.print("F: ");
+  Serial.print(distanceCm_F);
+  Serial.println(" cm");
+
+  Serial.print("RF: ");
+  Serial.print(distanceCm_RF);
+  Serial.println(" cm");
+
+  Serial.print("Shortest Distance: ");
+  Serial.print(shortDistance);
+  Serial.println("cm");
+
+  Serial.print("Vibration: ");
+  Serial.println(VibratorStatus);
+
   Serial.print("Warning Color: ");
   Serial.println(warningLightColor);
   Serial.println(" ");
 }
-
