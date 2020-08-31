@@ -1,22 +1,24 @@
 /**
  * Object Detector with Vibrate Warning System for Electric Skateboard
- * Date: August 24th, 2020
+ * Date: August 24th, 2020 - August 30th, 2020
  * Author: Anh Phan 
 **/
 
 //#include <LiquidCrystal.h> //Load Liquid Crystal Library
 //LiquidCrystal LCD(11,10,9,2,3,4,5);  //Create Liquid Crystal Object called LCD
 
-#define trigPin_LF 7 //Sensor Echo Left Front pin connected to Arduino pin 7
-#define echoPin_LF 6 //Sensor Trip Left Front pin connected to Arduino pin 6
+#define trigPin_RF 7 //Sensor Echo Left Front pin connected to Arduino pin 7
+#define echoPin_RF 6 //Sensor Trip Left Front pin connected to Arduino pin 6
 #define echoPin_F 5 //Sensor Trip Front pin connected to Arduino pin 5
 #define trigPin_F 4 //Sensor Echo Front pin connected to Arduino pin 4
-#define echoPin_RF 3 //Sensor Trip Right Front pin connected to Arduino pin 3
-#define trigPin_RF 2 //Sensor Echo Right Front pin connected to Arduino pin 2
+#define echoPin_LF 3 //Sensor Trip Right Front pin connected to Arduino pin 3
+#define trigPin_LF 2 //Sensor Echo Right Front pin connected to Arduino pin 2
 #define vibrator 8 //Vibration Motor connected to Arduino pin 8
 #define redLED 11  //redLED connected to Arduino pin 11
 #define greenLED 10  //greenLED connected to Arduino pin 10
 #define blueLED 9 //blueLED connected to Arduino pin 9
+#define beeper 12 //beeper connected to Arduino pin 12
+#define button 13 //button connected to Arduino pin 13
 const String warningLight[] = {"green", "yellow", "orange", "red"};
 const int greenRGB_values[3] = {0, 255, 0};
 const int yellowRGB_values[3] = {255, 255, 0};
@@ -24,6 +26,8 @@ const int orangeRGB_values[3] = {255, 69, 0};
 const int redRGB_values[3] = {255, 0, 0};
 const String booleanDef[2] = {"false", "true"};
 String warningVibratorStatus;
+String beeperStatus;
+String currentSwitchStatus = booleanDef[0];
 String warningLightColor = "green";
 
 void setup() 
@@ -42,6 +46,8 @@ void setup()
   pinMode(redLED, OUTPUT);
   pinMode(greenLED, OUTPUT);
   pinMode(blueLED, OUTPUT);
+  pinMode(beeper, OUTPUT);
+  pinMode(button, INPUT_PULLUP);
 
 /*
   //LCD Display
@@ -76,7 +82,7 @@ void loop()
 */
 
   //Update system on Serial port for debugging
-  printSerialReport(distanceCm_LF, distanceCm_F, distanceCm_RF, shortDistance, warningVibratorStatus, warningLightColor);
+  printSerialReport(distanceCm_LF, distanceCm_F, distanceCm_RF, shortDistance, warningVibratorStatus, beeperStatus, warningLightColor);
   
   delay(delayTime);
 }
@@ -168,6 +174,7 @@ long isSmallestDistance(long distanceCm_LF, long distanceCm_F, long distanceCm_R
 
   return distances[0];
 }
+
 /*
 //LCD Print
 void printDistanceInCentimeterLCD(long distanceCm)
@@ -196,29 +203,33 @@ void warningSystem(int safeDistanceCm, int moderateDistanceCm, int dangerDistanc
   if (distanceCm < safeDistanceCm && distanceCm > moderateDistanceCm) 
   {
     firstVibrationZone();
+    firstBuzzZone();
     lightActivator(yellowRGB_values[0], yellowRGB_values[1], yellowRGB_values[2]);
-    serialReport(booleanDef[1], 1);
+    serialReport(booleanDef[1], booleanDef[1], 1);
   }
   //Second zone (Distance: 2m to 3m away)
   else if (distanceCm < moderateDistanceCm && distanceCm > dangerDistanceCm) 
   {
     secondVibrationZone();
+    secondBuzzZone();
     lightActivator(orangeRGB_values[0], orangeRGB_values[1], orangeRGB_values[2]);
-    serialReport(booleanDef[1], 2);
+    serialReport(booleanDef[1], booleanDef[1], 2);
   } 
   //Third zone (Distance: within 2m)
   else if (distanceCm < dangerDistanceCm) 
   {
     thirdVibrationZone();
+    thirdBuzzZone();
     lightActivator(redRGB_values[0], redRGB_values[1], redRGB_values[2]);
-    serialReport(booleanDef[1], 3);
+    serialReport(booleanDef[1], booleanDef[1], 3);
   } 
   //Nothing detected
   else 
   {
     safeVibrationZone();
+    safeBuzzZone();
     lightActivator(greenRGB_values[0], greenRGB_values[1], greenRGB_values[2]);
-    serialReport(booleanDef[0], 0);
+    serialReport(booleanDef[0], booleanDef[0], 0);
   }
 }
 
@@ -255,15 +266,67 @@ void lightActivator(int redRGB, int greenRGB, int blueRGB)
   analogWrite(blueLED, blueRGB);
 }
 
-//Report warning system status
-void serialReport(String VibratorStatus, int warningLightValue)
+//Activate Beeper
+void beeperActivator(int freq, int onDuration)
 {
+  if (switchStatus() == booleanDef[1])
+  {
+    tone(beeper, freq, onDuration);
+  } else {
+    noTone(beeper);
+  }
+}
+
+//Four Buzz Stages
+void safeBuzzZone()
+{
+  noTone(beeper);
+}
+
+void firstBuzzZone()
+{
+  beeperActivator(5000, 500);
+}
+
+void secondBuzzZone()
+{
+  beeperActivator(5000, 200);
+}
+
+void thirdBuzzZone()
+{
+  beeperActivator(5000, 1000);
+}
+
+//Check switch status (push to turn on/off)
+String switchStatus()
+{
+  int buttonStatus = digitalRead(button);
+  String switchStatus = currentSwitchStatus;
+
+  if (buttonStatus == 0 && currentSwitchStatus == booleanDef[1])
+  {
+    switchStatus = booleanDef[0];
+  } 
+  else if (buttonStatus == 0 && currentSwitchStatus == booleanDef[0])
+  {
+    switchStatus = booleanDef[1];
+  } 
+  currentSwitchStatus = switchStatus;
+
+  return switchStatus;
+}
+
+//Report warning system status
+void serialReport(String VibratorStatus, String buzzStatus, int warningLightValue)
+{
+  beeperStatus = buzzStatus;
   warningVibratorStatus = VibratorStatus;
   warningLightColor = warningLight[warningLightValue];
 }
 
 //Update system into Serial port
-void printSerialReport(long distanceCm_LF, long distanceCm_F, long distanceCm_RF, long shortDistance, String VibratorStatus, String warningLightColor)
+void printSerialReport(long distanceCm_LF, long distanceCm_F, long distanceCm_RF, long shortDistance, String vibratorStatus, String beeperStatus, String warningLightColor)
 {
   Serial.println("Object Distance & Vibration & Light");
 
@@ -284,7 +347,13 @@ void printSerialReport(long distanceCm_LF, long distanceCm_F, long distanceCm_RF
   Serial.println("cm");
 
   Serial.print("Vibration: ");
-  Serial.println(VibratorStatus);
+  Serial.println(vibratorStatus);
+
+  Serial.print("Beeper (only work if button is true): ");
+  Serial.println(beeperStatus);
+
+  Serial.print("Button: ");
+  Serial.println(switchStatus());
 
   Serial.print("Warning Color: ");
   Serial.println(warningLightColor);
